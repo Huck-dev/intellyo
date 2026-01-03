@@ -103,16 +103,50 @@ app.get('/api/scenarios', (req, res) => {
   });
 });
 
-// List existing tests
-app.get('/api/tests', async (req, res) => {
+// List project directories (test suites)
+app.get('/api/projects', async (req, res) => {
   try {
     const testsDir = serverSettings.testDir;
-    const { stdout } = await execAsync(`ls ${testsDir}/*.yaml 2>/dev/null || echo ""`);
-    const files = stdout.trim().split('\n').filter(f => f);
-    const tests = files.map(f => ({
-      name: path.basename(f, '.test.yaml'),
-      path: f
+    const { stdout } = await execAsync(`find ${testsDir} -maxdepth 1 -type d 2>/dev/null`);
+    const dirs = stdout.trim().split('\n').filter(d => d && d !== testsDir);
+    const projects = dirs.map(d => ({
+      name: path.basename(d),
+      path: d
     }));
+    // Add "All Tests" option and root tests
+    projects.unshift({ name: '(Root Tests)', path: testsDir });
+    res.json({ projects });
+  } catch (error) {
+    res.json({ projects: [] });
+  }
+});
+
+// List existing tests (optionally filtered by project)
+app.get('/api/tests', async (req, res) => {
+  try {
+    const project = req.query.project as string;
+    const testsDir = project || serverSettings.testDir;
+
+    // Get tests from specified directory
+    const { stdout: dirTests } = await execAsync(`ls ${testsDir}/*.yaml 2>/dev/null || echo ""`);
+    let files = dirTests.trim().split('\n').filter(f => f);
+
+    // If showing root, also include subdirectory tests
+    if (!project || project === serverSettings.testDir) {
+      const { stdout: subTests } = await execAsync(`find ${serverSettings.testDir} -mindepth 2 -name "*.yaml" 2>/dev/null || echo ""`);
+      const subFiles = subTests.trim().split('\n').filter(f => f);
+      files = [...files, ...subFiles];
+    }
+
+    const tests = files.map(f => {
+      const dir = path.dirname(f);
+      const projectName = dir === serverSettings.testDir ? '' : path.basename(dir);
+      return {
+        name: path.basename(f, '.test.yaml'),
+        path: f,
+        project: projectName
+      };
+    });
     res.json({ tests });
   } catch (error) {
     res.json({ tests: [] });

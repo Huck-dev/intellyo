@@ -372,6 +372,12 @@
       <!-- Column 2: Existing Tests -->
       <div class="card">
         <h2>📋 Existing Tests</h2>
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label>Project / Test Suite</label>
+          <select id="project-select" onchange="loadTests()">
+            <option value="">All Projects</option>
+          </select>
+        </div>
         <input type="text" id="test-search" class="search-input" placeholder="🔍 Search tests...">
         <ul id="test-list" class="test-list">
           <li>Loading...</li>
@@ -506,6 +512,24 @@
       return JSON.parse(localStorage.getItem('intellyo-settings') || '{}');
     }
 
+    // Load projects for dropdown
+    async function loadProjects() {
+      try {
+        const res = await fetch(`${API}/api/projects`);
+        const { projects } = await res.json();
+        const select = document.getElementById('project-select');
+        select.innerHTML = '<option value="">All Projects</option>';
+        projects.forEach(p => {
+          const opt = document.createElement('option');
+          opt.value = p.path;
+          opt.textContent = p.name === '(Root Tests)' ? '📁 Root Tests' : `📂 ${p.name}`;
+          select.appendChild(opt);
+        });
+      } catch (e) {
+        console.error('Failed to load projects', e);
+      }
+    }
+
     // Initialize WebSocket
     function initWebSocket() {
       ws = new WebSocket(`ws://${window.location.host}`);
@@ -542,7 +566,9 @@
 
     // Load tests
     async function loadTests() {
-      const testsRes = await fetch(`${API}/api/tests`);
+      const projectPath = document.getElementById('project-select').value;
+      const url = projectPath ? `${API}/api/tests?project=${encodeURIComponent(projectPath)}` : `${API}/api/tests`;
+      const testsRes = await fetch(url);
       const { tests } = await testsRes.json();
       allTests = tests;
       renderTests(tests);
@@ -551,12 +577,13 @@
     function renderTests(tests) {
       const testList = document.getElementById('test-list');
       if (tests.length > 0) {
-        testList.innerHTML = tests.map(t =>
-          `<li class="test-item ${selectedTest === t.path ? 'selected' : ''}"
+        testList.innerHTML = tests.map(t => {
+          const projectBadge = t.project ? `<span style="color: #7b2cbf; font-size: 0.75rem; margin-left: 6px;">[${t.project}]</span>` : '';
+          return `<li class="test-item ${selectedTest === t.path ? 'selected' : ''}"
                onclick="selectTest('${t.path}', this)">
-            <span>📄 ${t.name}</span>
-          </li>`
-        ).join('');
+            <span>📄 ${t.name}${projectBadge}</span>
+          </li>`;
+        }).join('');
       } else {
         testList.innerHTML = '<li style="color: #888; padding: 12px;">No tests found</li>';
       }
@@ -701,6 +728,7 @@
 
     // Initialize
     initWebSocket();
+    loadProjects();
     loadTests();
     loadSettings();
   </script>
