@@ -412,6 +412,21 @@
       </div>
     </div>
 
+    <!-- Editor Modal -->
+    <div id="editor-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1000; padding: 40px;">
+      <div style="max-width: 900px; margin: 0 auto; height: 100%; display: flex; flex-direction: column;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h2 style="color: #00d4ff; margin: 0;">📝 <span id="editor-filename">Edit Test</span></h2>
+          <div style="display: flex; gap: 10px;">
+            <button class="btn btn-primary btn-sm" onclick="saveTest()">💾 Save</button>
+            <button class="btn btn-secondary btn-sm" onclick="closeEditor()">✖ Close</button>
+          </div>
+        </div>
+        <textarea id="test-editor" style="flex: 1; width: 100%; padding: 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: #0d0d0d; color: #00ff88; font-family: 'Monaco', 'Menlo', 'Consolas', monospace; font-size: 14px; line-height: 1.5; resize: none;"></textarea>
+        <div id="editor-status" style="margin-top: 10px; font-size: 0.85rem; color: #888;"></div>
+      </div>
+    </div>
+
     <!-- Output Panel (full width below) -->
     <div class="card" style="margin-top: 20px;">
       <h2>📺 Output</h2>
@@ -580,7 +595,9 @@
         testList.innerHTML = tests.map(t => {
           const projectBadge = t.project ? `<span style="color: #7b2cbf; font-size: 0.75rem; margin-left: 6px;">[${t.project}]</span>` : '';
           return `<li class="test-item ${selectedTest === t.path ? 'selected' : ''}"
-               onclick="selectTest('${t.path}', this)">
+               onclick="selectTest('${t.path}', this)"
+               ondblclick="openEditor('${t.path}')"
+               title="Double-click to edit">
             <span>📄 ${t.name}${projectBadge}</span>
           </li>`;
         }).join('');
@@ -588,6 +605,78 @@
         testList.innerHTML = '<li style="color: #888; padding: 12px;">No tests found</li>';
       }
     }
+
+    // Editor functions
+    let currentEditPath = null;
+
+    async function openEditor(testPath) {
+      currentEditPath = testPath;
+      document.getElementById('editor-filename').textContent = testPath.split('/').pop();
+      document.getElementById('editor-status').textContent = 'Loading...';
+      document.getElementById('editor-modal').style.display = 'block';
+
+      try {
+        const res = await fetch(`${API}/api/test-content?path=${encodeURIComponent(testPath)}`);
+        const data = await res.json();
+        if (data.content !== undefined) {
+          document.getElementById('test-editor').value = data.content;
+          document.getElementById('editor-status').textContent = 'Press Ctrl+S to save';
+          document.getElementById('editor-status').style.color = '#888';
+        } else {
+          document.getElementById('editor-status').textContent = 'Error loading file';
+          document.getElementById('editor-status').style.color = '#ff4444';
+        }
+      } catch (err) {
+        document.getElementById('editor-status').textContent = `Error: ${err.message}`;
+        document.getElementById('editor-status').style.color = '#ff4444';
+      }
+    }
+
+    async function saveTest() {
+      if (!currentEditPath) return;
+
+      const content = document.getElementById('test-editor').value;
+      document.getElementById('editor-status').textContent = 'Saving...';
+      document.getElementById('editor-status').style.color = '#00d4ff';
+
+      try {
+        const res = await fetch(`${API}/api/test-content`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: currentEditPath, content })
+        });
+        const data = await res.json();
+        if (data.success) {
+          document.getElementById('editor-status').textContent = 'Saved!';
+          document.getElementById('editor-status').style.color = '#00ff88';
+          appendOutput(`Saved: ${currentEditPath.split('/').pop()}`, 'success');
+        } else {
+          document.getElementById('editor-status').textContent = `Error: ${data.error}`;
+          document.getElementById('editor-status').style.color = '#ff4444';
+        }
+      } catch (err) {
+        document.getElementById('editor-status').textContent = `Error: ${err.message}`;
+        document.getElementById('editor-status').style.color = '#ff4444';
+      }
+    }
+
+    function closeEditor() {
+      document.getElementById('editor-modal').style.display = 'none';
+      currentEditPath = null;
+    }
+
+    // Keyboard shortcuts for editor
+    document.addEventListener('keydown', (e) => {
+      if (document.getElementById('editor-modal').style.display === 'block') {
+        if (e.ctrlKey && e.key === 's') {
+          e.preventDefault();
+          saveTest();
+        }
+        if (e.key === 'Escape') {
+          closeEditor();
+        }
+      }
+    });
 
     // Search tests
     document.getElementById('test-search').addEventListener('input', (e) => {

@@ -153,6 +153,39 @@ app.get('/api/tests', async (req, res) => {
   }
 });
 
+// Read test file content
+app.get('/api/test-content', async (req, res) => {
+  const testPath = req.query.path as string;
+  if (!testPath) {
+    return res.status(400).json({ error: 'Path required' });
+  }
+
+  try {
+    const fs = await import('fs/promises');
+    const content = await fs.readFile(testPath, 'utf-8');
+    res.json({ content });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Save test file content
+app.post('/api/test-content', async (req, res) => {
+  const { path: testPath, content } = req.body;
+  if (!testPath || content === undefined) {
+    return res.status(400).json({ error: 'Path and content required' });
+  }
+
+  try {
+    const fs = await import('fs/promises');
+    await fs.writeFile(testPath, content);
+    broadcast({ type: 'status', message: `Saved: ${testPath.split('/').pop()}` });
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Generate test
 app.post('/api/generate', async (req, res) => {
   const { scenario, browser, platform, baseUrl, aiProvider, apiKey, model } = req.body;
