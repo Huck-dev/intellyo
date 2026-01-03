@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Intellyo - AI Test Runner</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #fff;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    header {
+      text-align: center;
+      padding: 20px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      margin-bottom: 20px;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      background: linear-gradient(90deg, #00d4ff, #7b2cbf);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+    }
+
+    header p {
+      color: #888;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 1200px) {
+      .grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background: rgba(255,255,255,0.05);
+      border-radius: 12px;
+      padding: 20px;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .card h2 {
+      font-size: 1.1rem;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #00d4ff;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 6px;
+      color: #aaa;
+      font-size: 0.85rem;
+    }
+
+    select, input {
+      width: 100%;
+      padding: 10px 14px;
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(0,0,0,0.3);
+      color: #fff;
+      font-size: 0.95rem;
+    }
+
+    select:focus, input:focus {
+      outline: none;
+      border-color: #00d4ff;
+    }
+
+    select option {
+      background: #1a1a2e;
+    }
+
+    .btn {
+      padding: 12px 20px;
+      border-radius: 6px;
+      border: none;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      width: 100%;
+    }
+
+    .btn-primary {
+      background: linear-gradient(90deg, #00d4ff, #7b2cbf);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 5px 15px rgba(0,212,255,0.3);
+    }
+
+    .btn-secondary {
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255,255,255,0.2);
+    }
+
+    .btn-sm {
+      padding: 8px 12px;
+      font-size: 0.8rem;
+      width: auto;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .output {
+      background: #0d0d0d;
+      border-radius: 6px;
+      padding: 12px;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 0.8rem;
+      max-height: 300px;
+      overflow-y: auto;
+      min-height: 150px;
+    }
+
+    .output-line {
+      padding: 3px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .output-line.status { color: #00d4ff; }
+    .output-line.success { color: #00ff88; }
+    .output-line.error { color: #ff4444; }
+    .output-line.output { color: #aaa; }
+
+    .test-list {
+      list-style: none;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .test-item {
+      padding: 10px 12px;
+      border-radius: 6px;
+      margin-bottom: 6px;
+      background: rgba(0,0,0,0.2);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      transition: background 0.2s;
+      font-size: 0.9rem;
+    }
+
+    .test-item:hover {
+      background: rgba(0,212,255,0.1);
+    }
+
+    .test-item.selected {
+      background: rgba(0,212,255,0.2);
+      border: 1px solid rgba(0,212,255,0.5);
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .status-badge.connected {
+      background: rgba(0,255,136,0.2);
+      color: #00ff88;
+    }
+
+    .status-badge.disconnected {
+      background: rgba(255,68,68,0.2);
+      color: #ff4444;
+    }
+
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .checkbox-group input[type="checkbox"] {
+      width: auto;
+    }
+
+    .checkbox-group label {
+      margin: 0;
+      font-size: 0.9rem;
+      color: #ccc;
+    }
+
+    .inline-form {
+      display: flex;
+      gap: 10px;
+      align-items: end;
+    }
+
+    .inline-form .form-group {
+      flex: 1;
+      margin-bottom: 0;
+    }
+
+    .inline-form .btn {
+      width: auto;
+      white-space: nowrap;
+    }
+
+    .divider {
+      border-top: 1px solid rgba(255,255,255,0.1);
+      margin: 16px 0;
+    }
+
+    .settings-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .settings-row .form-group {
+      flex: 1;
+      min-width: 120px;
+    }
+
+    .run-all-btn {
+      margin-top: 12px;
+    }
+
+    .search-input {
+      margin-bottom: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🧪 Intellyo</h1>
+      <p>AI-Powered Test Runner</p>
+      <div style="margin-top: 10px;">
+        <span id="connection-status" class="status-badge disconnected">Disconnected</span>
+        <button class="btn btn-secondary btn-sm" style="margin-left: 10px;" onclick="toggleSettings()">⚙️ Settings</button>
+      </div>
+    </header>
+
+    <!-- Settings Panel (hidden by default) -->
+    <div id="settings-panel" class="card" style="display: none; margin-bottom: 20px;">
+      <h2>⚙️ Settings</h2>
+      <div class="settings-row">
+        <div class="form-group" style="flex: 2;">
+          <label>AI Provider</label>
+          <select id="ai-provider" onchange="updateProviderUI()">
+            <option value="ollama">🦙 Ollama (Local)</option>
+            <option value="openai">🤖 OpenAI</option>
+            <option value="anthropic">🔮 Anthropic</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex: 3;" id="api-key-group">
+          <label>API Key <span style="color: #666; font-size: 0.75rem;">(stored locally)</span></label>
+          <input type="password" id="api-key" placeholder="sk-... or your API key">
+        </div>
+        <div class="form-group" style="flex: 2;" id="model-group">
+          <label>Model</label>
+          <select id="ai-model">
+            <option value="auto">Auto-detect</option>
+          </select>
+        </div>
+      </div>
+      <div class="settings-row" style="margin-top: 12px;">
+        <div class="form-group" style="flex: 2;">
+          <label>Test Directory</label>
+          <input type="text" id="test-dir" placeholder="/path/to/tests">
+        </div>
+        <div class="form-group" style="flex: 1;">
+          <label>&nbsp;</label>
+          <button class="btn btn-secondary" onclick="saveSettings()">💾 Save Settings</button>
+        </div>
+      </div>
+      <div id="settings-status" style="margin-top: 10px; font-size: 0.85rem; color: #888;"></div>
+    </div>
+
+    <div class="grid">
+      <!-- Column 1: Quick Run -->
+      <div class="card">
+        <h2>⚡ Quick Run</h2>
+        <p style="color: #888; font-size: 0.85rem; margin-bottom: 16px;">Generate and run a test instantly</p>
+
+        <div class="form-group">
+          <label>Test Type</label>
+          <select id="scenario">
+            <option value="login">🔐 Login Flow</option>
+            <option value="signup">📝 Signup Flow</option>
+            <option value="messages">💬 Send Message</option>
+            <option value="media">📷 Send Media</option>
+            <option value="profile">👤 View Profile</option>
+            <option value="checkout">💳 Checkout</option>
+            <option value="settings">⚙️ Settings</option>
+            <option value="admin">🛡️ Admin Dashboard</option>
+            <option value="smoke">🔥 Smoke Test (All Pages)</option>
+          </select>
+        </div>
+
+        <div class="settings-row">
+          <div class="form-group">
+            <label>Browser</label>
+            <select id="browser">
+              <option value="chrome">🌐 Chrome</option>
+              <option value="firefox">🦊 Firefox</option>
+              <option value="safari">🧭 Safari</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Base URL</label>
+            <input type="text" id="baseUrl" value="http://localhost:4444">
+          </div>
+        </div>
+
+        <div class="checkbox-group" style="margin-bottom: 16px;">
+          <input type="checkbox" id="visible" checked>
+          <label for="visible">Show browser window</label>
+        </div>
+
+        <button class="btn btn-primary" id="quick-run-btn">
+          ▶️ Generate & Run
+        </button>
+      </div>
+
+      <!-- Column 2: Existing Tests -->
+      <div class="card">
+        <h2>📋 Existing Tests</h2>
+        <input type="text" id="test-search" class="search-input" placeholder="🔍 Search tests...">
+        <ul id="test-list" class="test-list">
+          <li>Loading...</li>
+        </ul>
+        <button class="btn btn-secondary run-all-btn" id="run-selected-btn">
+          ▶️ Run Selected Test
+        </button>
+      </div>
+
+      <!-- Column 3: Output -->
+      <div class="card">
+        <h2>📺 Output</h2>
+        <div id="output" class="output">
+          <div class="output-line status">Waiting for connection...</div>
+        </div>
+        <div style="margin-top: 12px;">
+          <button class="btn btn-secondary btn-sm" onclick="clearOutput()">Clear</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API = '';
+    let ws;
+    let selectedTest = null;
+    let allTests = [];
+
+    // Settings management
+    function loadSettings() {
+      const settings = JSON.parse(localStorage.getItem('intellyo-settings') || '{}');
+      if (settings.provider) document.getElementById('ai-provider').value = settings.provider;
+      if (settings.apiKey) document.getElementById('api-key').value = settings.apiKey;
+      if (settings.model) document.getElementById('ai-model').value = settings.model;
+      if (settings.testDir) document.getElementById('test-dir').value = settings.testDir;
+      updateProviderUI();
+    }
+
+    function saveSettings() {
+      const settings = {
+        provider: document.getElementById('ai-provider').value,
+        apiKey: document.getElementById('api-key').value,
+        model: document.getElementById('ai-model').value,
+        testDir: document.getElementById('test-dir').value
+      };
+      localStorage.setItem('intellyo-settings', JSON.stringify(settings));
+
+      // Send to server
+      fetch(`${API}/api/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings)
+      }).then(() => {
+        document.getElementById('settings-status').textContent = 'Settings saved!';
+        document.getElementById('settings-status').style.color = '#00ff88';
+        setTimeout(() => {
+          document.getElementById('settings-status').textContent = '';
+        }, 3000);
+      }).catch(err => {
+        document.getElementById('settings-status').textContent = 'Error saving settings';
+        document.getElementById('settings-status').style.color = '#ff4444';
+      });
+    }
+
+    function toggleSettings() {
+      const panel = document.getElementById('settings-panel');
+      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function updateProviderUI() {
+      const provider = document.getElementById('ai-provider').value;
+      const apiKeyGroup = document.getElementById('api-key-group');
+      const modelSelect = document.getElementById('ai-model');
+
+      // Show/hide API key based on provider
+      if (provider === 'ollama') {
+        apiKeyGroup.style.display = 'none';
+        // Load Ollama models
+        loadOllamaModels();
+      } else {
+        apiKeyGroup.style.display = 'block';
+        // Set default models for cloud providers
+        modelSelect.innerHTML = provider === 'openai'
+          ? '<option value="gpt-4o">GPT-4o</option><option value="gpt-4o-mini">GPT-4o Mini</option><option value="gpt-4-turbo">GPT-4 Turbo</option>'
+          : '<option value="claude-sonnet-4-20250514">Claude Sonnet 4</option><option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</option><option value="claude-3-haiku-20240307">Claude 3 Haiku</option>';
+      }
+    }
+
+    async function loadOllamaModels() {
+      try {
+        const res = await fetch(`${API}/api/models`);
+        const { models } = await res.json();
+        const modelSelect = document.getElementById('ai-model');
+        if (models && models.length > 0) {
+          modelSelect.innerHTML = models.map(m =>
+            `<option value="${m.name}">${m.name} (${m.size})</option>`
+          ).join('');
+        } else {
+          modelSelect.innerHTML = '<option value="">No models found</option>';
+        }
+      } catch (e) {
+        document.getElementById('ai-model').innerHTML = '<option value="">Ollama not available</option>';
+      }
+    }
+
+    function getSettings() {
+      return JSON.parse(localStorage.getItem('intellyo-settings') || '{}');
+    }
+
+    // Initialize WebSocket
+    function initWebSocket() {
+      ws = new WebSocket(`ws://${window.location.host}`);
+
+      ws.onopen = () => {
+        document.getElementById('connection-status').textContent = 'Connected';
+        document.getElementById('connection-status').className = 'status-badge connected';
+      };
+
+      ws.onclose = () => {
+        document.getElementById('connection-status').textContent = 'Disconnected';
+        document.getElementById('connection-status').className = 'status-badge disconnected';
+        setTimeout(initWebSocket, 3000);
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        appendOutput(data.message, data.type);
+      };
+    }
+
+    function appendOutput(message, type = 'output') {
+      const output = document.getElementById('output');
+      const line = document.createElement('div');
+      line.className = `output-line ${type}`;
+      line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      output.appendChild(line);
+      output.scrollTop = output.scrollHeight;
+    }
+
+    function clearOutput() {
+      document.getElementById('output').innerHTML = '<div class="output-line status">Output cleared</div>';
+    }
+
+    // Load tests
+    async function loadTests() {
+      const testsRes = await fetch(`${API}/api/tests`);
+      const { tests } = await testsRes.json();
+      allTests = tests;
+      renderTests(tests);
+    }
+
+    function renderTests(tests) {
+      const testList = document.getElementById('test-list');
+      if (tests.length > 0) {
+        testList.innerHTML = tests.map(t =>
+          `<li class="test-item ${selectedTest === t.path ? 'selected' : ''}"
+               onclick="selectTest('${t.path}', this)">
+            <span>📄 ${t.name}</span>
+          </li>`
+        ).join('');
+      } else {
+        testList.innerHTML = '<li style="color: #888; padding: 12px;">No tests found</li>';
+      }
+    }
+
+    // Search tests
+    document.getElementById('test-search').addEventListener('input', (e) => {
+      const query = e.target.value.toLowerCase();
+      const filtered = allTests.filter(t => t.name.toLowerCase().includes(query));
+      renderTests(filtered);
+    });
+
+    function selectTest(path, element) {
+      selectedTest = path;
+      document.querySelectorAll('.test-item').forEach(item => {
+        item.classList.remove('selected');
+      });
+      if (element) element.classList.add('selected');
+    }
+
+    // Quick Run - Generate and run in one step
+    document.getElementById('quick-run-btn').addEventListener('click', async () => {
+      const scenario = document.getElementById('scenario').value;
+      const browser = document.getElementById('browser').value;
+      const baseUrl = document.getElementById('baseUrl').value;
+      const visible = document.getElementById('visible').checked;
+      const settings = getSettings();
+
+      appendOutput(`Generating and running ${scenario} test...`, 'status');
+
+      try {
+        // Generate the test with AI settings
+        const genRes = await fetch(`${API}/api/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            scenario,
+            browser,
+            platform: 'desktop',
+            baseUrl,
+            aiProvider: settings.provider,
+            apiKey: settings.apiKey,
+            model: settings.model
+          })
+        });
+        const genData = await genRes.json();
+
+        if (genData.success) {
+          appendOutput(`Test generated: ${genData.path}`, 'success');
+
+          // Immediately run it
+          const runRes = await fetch(`${API}/api/run`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ testPath: genData.path, browser, visible })
+          });
+
+          // Refresh test list
+          loadTests();
+        } else {
+          appendOutput(`Error: ${genData.error}`, 'error');
+        }
+      } catch (err) {
+        appendOutput(`Error: ${err.message}`, 'error');
+      }
+    });
+
+    // Run selected existing test
+    document.getElementById('run-selected-btn').addEventListener('click', async () => {
+      if (!selectedTest) {
+        appendOutput('Please select a test from the list first', 'error');
+        return;
+      }
+
+      const browser = document.getElementById('browser').value;
+      const visible = document.getElementById('visible').checked;
+
+      appendOutput(`Running: ${selectedTest.split('/').pop()}`, 'status');
+
+      try {
+        await fetch(`${API}/api/run`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ testPath: selectedTest, browser, visible })
+        });
+      } catch (err) {
+        appendOutput(`Error: ${err.message}`, 'error');
+      }
+    });
+
+    // Initialize
+    initWebSocket();
+    loadTests();
+    loadSettings();
+  </script>
+</body>
+</html>
