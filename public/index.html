@@ -381,9 +381,34 @@
         </button>
       </div>
 
-      <!-- Column 3: Output -->
+      <!-- Column 3: AI Test Generator -->
       <div class="card">
-        <h2>📺 Output</h2>
+        <h2>🤖 AI Test Generator</h2>
+        <p style="color: #888; font-size: 0.85rem; margin-bottom: 12px;">Describe your app to generate tests</p>
+        <div class="form-group">
+          <label>App Description</label>
+          <textarea id="app-description" rows="4" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: #fff; font-size: 0.9rem; resize: vertical;" placeholder="e.g., A social media app with user login, profile pages, messaging, photo uploads, and a feed. Users can follow each other and like posts."></textarea>
+        </div>
+        <div class="settings-row">
+          <div class="form-group">
+            <label>Project Name</label>
+            <input type="text" id="project-name" placeholder="my-app">
+          </div>
+          <div class="form-group">
+            <label>Base URL</label>
+            <input type="text" id="ai-base-url" value="http://localhost:3000">
+          </div>
+        </div>
+        <button class="btn btn-primary" id="generate-ai-tests-btn" style="margin-bottom: 12px;">
+          ✨ Generate Test Suite
+        </button>
+        <div id="ai-generation-status" style="font-size: 0.85rem; color: #888; margin-bottom: 12px;"></div>
+      </div>
+    </div>
+
+    <!-- Output Panel (full width below) -->
+    <div class="card" style="margin-top: 20px;">
+      <h2>📺 Output</h2>
         <div id="output" class="output">
           <div class="output-line status">Waiting for connection...</div>
         </div>
@@ -619,6 +644,58 @@
         });
       } catch (err) {
         appendOutput(`Error: ${err.message}`, 'error');
+      }
+    });
+
+    // AI Test Suite Generation
+    document.getElementById('generate-ai-tests-btn').addEventListener('click', async () => {
+      const description = document.getElementById('app-description').value.trim();
+      const projectName = document.getElementById('project-name').value.trim() || 'my-app';
+      const baseUrl = document.getElementById('ai-base-url').value.trim() || 'http://localhost:3000';
+      const settings = getSettings();
+
+      if (!description) {
+        document.getElementById('ai-generation-status').textContent = 'Please describe your app first';
+        document.getElementById('ai-generation-status').style.color = '#ff4444';
+        return;
+      }
+
+      const btn = document.getElementById('generate-ai-tests-btn');
+      btn.disabled = true;
+      btn.textContent = '⏳ Generating...';
+      document.getElementById('ai-generation-status').textContent = 'Analyzing your app description...';
+      document.getElementById('ai-generation-status').style.color = '#00d4ff';
+
+      try {
+        const res = await fetch(`${API}/api/generate-suite`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            description,
+            projectName,
+            baseUrl,
+            provider: settings.provider,
+            apiKey: settings.apiKey,
+            model: settings.model
+          })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          document.getElementById('ai-generation-status').textContent = `Generated ${data.testsCreated} tests!`;
+          document.getElementById('ai-generation-status').style.color = '#00ff88';
+          appendOutput(`AI generated ${data.testsCreated} test files for "${projectName}"`, 'success');
+          loadTests(); // Refresh test list
+        } else {
+          document.getElementById('ai-generation-status').textContent = `Error: ${data.error}`;
+          document.getElementById('ai-generation-status').style.color = '#ff4444';
+        }
+      } catch (err) {
+        document.getElementById('ai-generation-status').textContent = `Error: ${err.message}`;
+        document.getElementById('ai-generation-status').style.color = '#ff4444';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '✨ Generate Test Suite';
       }
     });
 

@@ -183,6 +183,388 @@ app.post('/api/run', async (req, res) => {
   res.json({ success: true, message: 'Test started' });
 });
 
+// AI-powered test suite generation
+app.post('/api/generate-suite', async (req, res) => {
+  const { description, projectName, baseUrl, provider, apiKey, model } = req.body;
+
+  broadcast({ type: 'status', message: `Generating test suite for "${projectName}"...` });
+
+  try {
+    const fs = await import('fs/promises');
+
+    // Create project test directory
+    const projectTestDir = `${serverSettings.testDir}/${projectName}`;
+    await fs.mkdir(projectTestDir, { recursive: true });
+
+    // Use AI to analyze description and generate tests
+    const tests = await generateTestsWithAI(description, projectName, baseUrl, provider || serverSettings.provider, apiKey || serverSettings.apiKey, model || serverSettings.model);
+
+    // Write each test file
+    let testsCreated = 0;
+    for (const test of tests) {
+      const testPath = `${projectTestDir}/${test.name}.test.yaml`;
+      await fs.writeFile(testPath, test.content);
+      broadcast({ type: 'output', message: `Created: ${test.name}.test.yaml` });
+      testsCreated++;
+    }
+
+    broadcast({ type: 'success', message: `Generated ${testsCreated} tests for ${projectName}` });
+    res.json({ success: true, testsCreated, directory: projectTestDir });
+  } catch (error: any) {
+    broadcast({ type: 'error', message: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Generate tests using AI (Ollama or cloud providers)
+async function generateTestsWithAI(
+  description: string,
+  projectName: string,
+  baseUrl: string,
+  provider: string,
+  apiKey: string,
+  model: string
+): Promise<Array<{ name: string; content: string }>> {
+
+  const prompt = `You are a test automation expert. Based on this app description, generate a list of test scenarios as JSON.
+
+App Description: ${description}
+Base URL: ${baseUrl}
+
+Return ONLY a JSON array of test objects. Each object should have:
+- "name": short test name (kebab-case, e.g., "user-login", "send-message")
+- "description": what the test does
+- "steps": array of test steps, each with "type" and relevant fields
+
+Step types available:
+- navigate: { type: "navigate", value: "/path" }
+- wait: { type: "wait", timeout: 2000 }
+- input: { type: "input", target: { css: "selector" }, value: "text" }
+- tap: { type: "tap", target: { css: "selector" } }
+- screenshot: { type: "screenshot", name: "filename.png" }
+- assert: { type: "assert", target: { css: "selector" } }
+
+Example response:
+[
+  {
+    "name": "user-login",
+    "description": "Test user login flow",
+    "steps": [
+      { "type": "navigate", "value": "/login" },
+      { "type": "wait", "timeout": 2000 },
+      { "type": "input", "target": { "css": "input[type='email']" }, "value": "test@example.com" },
+      { "type": "input", "target": { "css": "input[type='password']" }, "value": "password123" },
+      { "type": "tap", "target": { "css": "button[type='submit']" } },
+      { "type": "wait", "timeout": 3000 },
+      { "type": "screenshot", "name": "login-result.png" }
+    ]
+  }
+]
+
+Generate 3-8 relevant tests based on the app description. Return ONLY valid JSON, no markdown.`;
+
+  let aiResponse: string;
+
+  if (provider === 'ollama') {
+    // Use Ollama
+    const ollamaModel = model || 'qwen2.5-coder:7b';
+    const ollamaRes = await fetch('http://localhost:11434/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: ollamaModel,
+        prompt,
+        stream: false
+      })
+    });
+    const ollamaData = await ollamaRes.json();
+    aiResponse = ollamaData.response;
+  } else if (provider === 'openai' && apiKey) {
+    // Use OpenAI
+    const openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: model || 'gpt-4o-mini',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7
+      })
+    });
+    const openaiData = await openaiRes.json();
+    aiResponse = openaiData.choices?.[0]?.message?.content || '';
+  } else if (provider === 'anthropic' && apiKey) {
+    // Use Anthropic
+    const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: model || 'claude-3-haiku-20240307',
+        max_tokens: 4096,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const anthropicData = await anthropicRes.json();
+    aiResponse = anthropicData.content?.[0]?.text || '';
+  } else {
+    // Fallback: generate basic tests from description keywords
+    return generateFallbackTests(description, projectName, baseUrl);
+  }
+
+  // Parse AI response
+  try {
+    // Extract JSON from response (handle markdown code blocks)
+    const jsonMatch = aiResponse.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) {
+      broadcast({ type: 'output', message: 'AI response did not contain valid JSON, using fallback' });
+      return generateFallbackTests(description, projectName, baseUrl);
+    }
+
+    const testSpecs = JSON.parse(jsonMatch[0]);
+
+    // Convert to YAML test files
+    return testSpecs.map((spec: any) => ({
+      name: spec.name,
+      content: generateYamlFromSpec(spec, projectName, baseUrl)
+    }));
+  } catch (e) {
+    broadcast({ type: 'output', message: 'Failed to parse AI response, using fallback' });
+    return generateFallbackTests(description, projectName, baseUrl);
+  }
+}
+
+// Generate YAML from AI spec
+function generateYamlFromSpec(spec: any, projectName: string, baseUrl: string): string {
+  let yaml = `name: ${spec.description || spec.name}
+platform: web
+
+config:
+  web:
+    baseUrl: ${baseUrl}
+    headless: false
+
+steps:
+`;
+
+  for (const step of spec.steps) {
+    if (step.type === 'navigate') {
+      yaml += `  - type: navigate
+    value: ${step.value}
+
+`;
+    } else if (step.type === 'wait') {
+      yaml += `  - type: wait
+    timeout: ${step.timeout || 2000}
+
+`;
+    } else if (step.type === 'input') {
+      yaml += `  - type: input
+    target:
+      css: "${step.target?.css || 'input'}"
+    value: "${step.value || ''}"
+
+`;
+    } else if (step.type === 'tap') {
+      yaml += `  - type: tap
+    target:
+      css: "${step.target?.css || 'button'}"
+
+`;
+    } else if (step.type === 'screenshot') {
+      yaml += `  - type: screenshot
+    name: ${step.name || 'screenshot.png'}
+
+`;
+    } else if (step.type === 'assert') {
+      yaml += `  - type: assert
+    target:
+      css: "${step.target?.css || 'body'}"
+
+`;
+    }
+  }
+
+  return yaml;
+}
+
+// Fallback test generation without AI
+function generateFallbackTests(description: string, projectName: string, baseUrl: string): Array<{ name: string; content: string }> {
+  const tests: Array<{ name: string; content: string }> = [];
+  const desc = description.toLowerCase();
+
+  // Always add a smoke test
+  tests.push({
+    name: 'smoke-test',
+    content: `name: Smoke Test
+platform: web
+
+config:
+  web:
+    baseUrl: ${baseUrl}
+    headless: false
+
+steps:
+  - type: navigate
+    value: /
+
+  - type: wait
+    timeout: 2000
+
+  - type: screenshot
+    name: ${projectName}-home.png
+
+  - type: assert
+    target:
+      css: "body"
+`
+  });
+
+  // Add login test if mentioned
+  if (desc.includes('login') || desc.includes('auth') || desc.includes('sign in')) {
+    tests.push({
+      name: 'login-flow',
+      content: `name: Login Flow Test
+platform: web
+
+config:
+  web:
+    baseUrl: ${baseUrl}
+    headless: false
+
+steps:
+  - type: navigate
+    value: /login
+
+  - type: wait
+    timeout: 2000
+
+  - type: input
+    target:
+      css: "input[type='email'], input[name='email']"
+    value: "test@example.com"
+
+  - type: input
+    target:
+      css: "input[type='password'], input[name='password']"
+    value: "password123"
+
+  - type: tap
+    target:
+      css: "button[type='submit']"
+
+  - type: wait
+    timeout: 3000
+
+  - type: screenshot
+    name: ${projectName}-login-result.png
+`
+    });
+  }
+
+  // Add signup test if mentioned
+  if (desc.includes('signup') || desc.includes('register') || desc.includes('sign up')) {
+    tests.push({
+      name: 'signup-flow',
+      content: `name: Signup Flow Test
+platform: web
+
+config:
+  web:
+    baseUrl: ${baseUrl}
+    headless: false
+
+steps:
+  - type: navigate
+    value: /signup
+
+  - type: wait
+    timeout: 2000
+
+  - type: screenshot
+    name: ${projectName}-signup-page.png
+
+  - type: input
+    target:
+      css: "input[type='email'], input[name='email']"
+    value: "newuser@example.com"
+
+  - type: input
+    target:
+      css: "input[type='password'], input[name='password']"
+    value: "password123"
+
+  - type: tap
+    target:
+      css: "button[type='submit']"
+
+  - type: wait
+    timeout: 3000
+
+  - type: screenshot
+    name: ${projectName}-signup-result.png
+`
+    });
+  }
+
+  // Add messaging test if mentioned
+  if (desc.includes('message') || desc.includes('chat') || desc.includes('messaging')) {
+    tests.push({
+      name: 'messaging',
+      content: `name: Messaging Test
+platform: web
+
+config:
+  web:
+    baseUrl: ${baseUrl}
+    headless: false
+
+steps:
+  - type: navigate
+    value: /messages
+
+  - type: wait
+    timeout: 2000
+
+  - type: screenshot
+    name: ${projectName}-messages.png
+`
+    });
+  }
+
+  // Add profile test if mentioned
+  if (desc.includes('profile') || desc.includes('user')) {
+    tests.push({
+      name: 'user-profile',
+      content: `name: User Profile Test
+platform: web
+
+config:
+  web:
+    baseUrl: ${baseUrl}
+    headless: false
+
+steps:
+  - type: navigate
+    value: /profile
+
+  - type: wait
+    timeout: 2000
+
+  - type: screenshot
+    name: ${projectName}-profile.png
+`
+    });
+  }
+
+  return tests;
+}
+
 // Credentials
 const CREDENTIALS = {
   user: { email: 'newuser@test.com', password: 'Leonidas12!' },
